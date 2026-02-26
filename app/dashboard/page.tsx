@@ -1,4 +1,5 @@
 import { DashboardOverview } from "@/components/dashboard/overview";
+import { OracleMonitor } from "@/components/dashboard/oracle-monitor";
 
 export const metadata = {
   title: "ChainLex.ai — Monitoring Dashboard",
@@ -15,6 +16,7 @@ export default function DashboardPage() {
           datastore.
         </p>
       </header>
+      <OracleMonitor />
       <DashboardOverview />
     </section>
   );

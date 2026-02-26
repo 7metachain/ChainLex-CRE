@@ -20,7 +20,7 @@ export async function sendAiPrompt(messages: ChatMessage[], signal?: AbortSignal
       "X-Title": "ChainLex.ai",
     },
     body: JSON.stringify({
-      model: "qwen/qwen3-coder:free",
+      model: "openai/gpt-oss-120b:free",
       messages,
     }),
     signal,

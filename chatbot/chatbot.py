@@ -3,11 +3,18 @@
 RWA代币发行说明书智能交互Agent系统 - 基于LangGraph的多工具Graph架构
 改造自test-graph-demo.py，实现多工具、多节点的graph-based智能交互agent系统
 """
+import os
 import re
 import json
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, TypedDict, Literal, Any
 from datetime import datetime
+from dotenv import load_dotenv
+
+_env_path = Path(__file__).resolve().parent.parent / ".env.local"
+load_dotenv(dotenv_path=str(_env_path), override=True)
+
+_OPENROUTER_KEY = os.getenv("OPENROUTER_API_KEY", "")
 
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
@@ -15,7 +22,10 @@ from langchain_core.tools import tool
 from langchain.agents import AgentExecutor, create_openai_tools_agent, AgentType
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langgraph.graph import StateGraph, START, END
-from langgraph.checkpoint.memory import InMemorySaver
+try:
+    from langgraph.checkpoint.memory import InMemorySaver
+except ImportError:
+    from langgraph.checkpoint.memory import MemorySaver as InMemorySaver
 
 # ==================== 状态定义 ====================
 class DocumentState(TypedDict):
@@ -377,10 +387,13 @@ def initialize_agent():
     """初始化Agent，集成所有工具"""
 
     # 初始化LLM
+    api_key = _OPENROUTER_KEY or os.getenv("OPENROUTER_API_KEY", "")
+    if not api_key:
+        raise ValueError("OPENROUTER_API_KEY not found. Set it in .env.local")
     llm = ChatOpenAI(
-        base_url="https://apis.iflow.cn/v1",
-        api_key="sk-34d42e4c747d1bdf0f02beaca589cd38",
-        model="kimi-k2-0905",
+        openai_api_base="https://openrouter.ai/api/v1",
+        openai_api_key=api_key,
+        model="openai/gpt-4.1-nano",
         temperature=0.1
     )
 

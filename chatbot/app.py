@@ -40,6 +40,7 @@ class SessionCreate(BaseModel):
     """创建会话模型"""
     user_name: Optional[str] = Field(None, description="用户名称")
     project_name: Optional[str] = Field(None, description="项目名称")
+    jurisdiction: Optional[str] = Field(None, description="法域选择 (hk/sg/us/ae)")
 
 class SessionInfo(BaseModel):
     """会话信息模型"""
@@ -58,6 +59,23 @@ class DocumentExport(BaseModel):
     format: str = Field("markdown", description="导出格式: markdown, json")
     include_history: bool = Field(True, description="是否包含对话历史")
 
+class RiskAssessmentRequest(BaseModel):
+    """风险评估请求模型（Mock）"""
+    wallet_address: str = Field(..., description="待评估钱包地址")
+    chain: str = Field("sepolia", description="链名称")
+    provider: str = Field("mock-chainalysis", description="风控数据源")
+
+class RiskAssessmentResponse(BaseModel):
+    """风险评估响应模型（Mock）"""
+    wallet_address: str
+    chain: str
+    provider: str
+    score: int
+    level: str
+    is_blacklisted: bool
+    reason: str
+    assessed_at: str
+
 # ==================== 全局状态管理 ====================
 class SessionManager:
     """会话管理器"""
@@ -66,7 +84,7 @@ class SessionManager:
         self.sessions: Dict[str, Dict[str, Any]] = {}
         self.agent_instances: Dict[str, Any] = {}
 
-    def create_session(self, user_name: Optional[str] = None, project_name: Optional[str] = None) -> str:
+    def create_session(self, user_name: Optional[str] = None, project_name: Optional[str] = None, jurisdiction: Optional[str] = None) -> str:
         """创建新会话"""
         session_id = str(uuid.uuid4())
 
@@ -82,13 +100,15 @@ class SessionManager:
             "ai_summary": "",
             "agent_response": "",
             "section_complete": False,
-            "extracted_info": {}
+            "extracted_info": {},
+            "jurisdiction": jurisdiction  # 保存法域信息
         }
 
         # 创建会话记录
         self.sessions[session_id] = {
             "user_name": user_name,
             "project_name": project_name,
+            "jurisdiction": jurisdiction,
             "created_at": datetime.now(),
             "last_activity": datetime.now(),
             "total_messages": 0,
@@ -187,7 +207,8 @@ async def create_session(session_data: SessionCreate):
     try:
         session_id = session_manager.create_session(
             user_name=session_data.user_name,
-            project_name=session_data.project_name
+            project_name=session_data.project_name,
+            jurisdiction=session_data.jurisdiction
         )
 
         session = session_manager.get_session(session_id)
@@ -202,6 +223,50 @@ async def create_session(session_data: SessionCreate):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"创建会话失败: {str(e)}")
+
+@app.post("/risk-assessment", response_model=RiskAssessmentResponse, tags=["风控Mock"])
+async def assess_risk(payload: RiskAssessmentRequest):
+    """Mock 风险评估接口，用于演示 Oracle 闭环"""
+    address = payload.wallet_address.strip()
+    if not address.startswith("0x") or len(address) != 42:
+        raise HTTPException(status_code=400, detail="钱包地址格式无效")
+
+    try:
+        # 使用地址尾部字节生成稳定评分，保证同一地址结果可复现
+        seed = int(address[-8:], 16)
+        score = seed % 1001
+
+        if score >= 900:
+            level = "BLOCKED"
+        elif score >= 700:
+            level = "HIGH"
+        elif score >= 400:
+            level = "MEDIUM"
+        else:
+            level = "LOW"
+
+        is_blacklisted = score >= 950 or address.lower().endswith("dead")
+        if is_blacklisted:
+            level = "BLOCKED"
+
+        reason = (
+            "Sanctions match risk detected"
+            if is_blacklisted
+            else f"Mock risk model score={score}"
+        )
+
+        return RiskAssessmentResponse(
+            wallet_address=address,
+            chain=payload.chain,
+            provider=payload.provider,
+            score=score,
+            level=level,
+            is_blacklisted=is_blacklisted,
+            reason=reason,
+            assessed_at=datetime.now().isoformat()
+        )
+    except ValueError:
+        raise HTTPException(status_code=400, detail="钱包地址解析失败")
 
 @app.get("/session/list", response_model=List[SessionInfo], tags=["会话管理"])
 async def list_sessions():
@@ -266,12 +331,25 @@ async def chat(message: ChatMessage):
         # 使用Agent处理用户输入
         agent_executor = initialize_agent()
         state_json = state_to_json(state)
+        
+        # 获取法域信息并生成合规提示
+        jurisdiction = session.get("jurisdiction") or state.get("jurisdiction")
+        jurisdiction_prompt = ""
+        if jurisdiction:
+            jurisdiction_guidance = {
+                "hk": "用户选择了香港法域。请特别注意：香港证监会(SFC)的监管要求，包括专业投资者(PI)限制、私募发行要求(≤50人，单笔≥HKD 500k)、以及相关的KYC/AML合规要求。",
+                "sg": "用户选择了新加坡法域。请特别注意：新加坡金融管理局(MAS)的监管框架，包括证券法、支付服务法(PSA)的相关要求，以及数字代币的监管分类。",
+                "us": "用户选择了美国法域。请特别注意：美国SEC的证券法要求，包括Howey测试、合格投资者(Accredited Investor)标准、以及各州不同的监管要求。",
+                "ae": "用户选择了阿联酋法域。请特别注意：ADGM(阿布扎比全球市场)或DIFC(迪拜国际金融中心)的监管框架，以及相关的数字资产监管要求。"
+            }
+            jurisdiction_prompt = jurisdiction_guidance.get(jurisdiction.lower(), "")
 
         agent_input = f"""
 用户输入：{message.content}
 
 当前状态：
 {state_json}
+{jurisdiction_prompt}
 
 请根据用户输入和当前状态，选择合适的工具来处理。
 """
@@ -334,7 +412,10 @@ async def chat(message: ChatMessage):
         )
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"聊天处理失败: {str(e)}")
+        import traceback
+        error_detail = traceback.format_exc()
+        print(f"❌ Chat error: {error_detail}")
+        raise HTTPException(status_code=500, detail=f"聊天处理失败: {repr(e)}\n{error_detail}")
 
 @app.get("/session/{session_id}/state", tags=["会话管理"])
 async def get_session_state(session_id: str):

@@ -14,7 +14,7 @@ import { v4 as uuid } from "uuid";
 import { JurisdictionSelector } from "@/components/compliance/jurisdiction-selector";
 
 // ChatBot API 配置
-const CHATBOT_API_BASE = "http://localhost:8000";
+const CHATBOT_API_BASE = process.env.NEXT_PUBLIC_CHATBOT_API_BASE || "http://localhost:8000";
 
 // 聊天消息类型
 interface ChatBotMessage {
@@ -55,12 +55,25 @@ type ConversationMessage = ChatBotMessage & { id: string };
 export function DocumentWorkbench() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const getWelcomeMessage = useCallback((jurisdiction: string | null) => {
+    if (jurisdiction) {
+      const jurisdictionNames: Record<string, string> = {
+        hk: "Hong Kong",
+        sg: "Singapore", 
+        us: "United States",
+        ae: "United Arab Emirates"
+      };
+      const name = jurisdictionNames[jurisdiction] || jurisdiction.toUpperCase();
+      return `Welcome! I will help you complete 12 sections of compliance documentation for ${name} jurisdiction. The AI assistant will provide jurisdiction-specific compliance guidance. Please tell me your token basic information, or say 'start generation' to begin.`;
+    }
+    return "Welcome to the RWA Token Listing Memo Assistant! I will help you complete 12 sections of compliance documentation. Please select a jurisdiction first for compliance-specific guidance, or tell me your token basic information to start.";
+  }, []);
+
   const [messages, setMessages] = useState<ConversationMessage[]>([
     {
       id: uuid(),
       role: "assistant",
-      content:
-        "Welcome to the RWA Token Listing Memo Assistant! I will help you complete 12 sections of compliance documentation. Please tell me your token basic information, or say 'start generation' to let me guide you through the entire process.",
+      content: getWelcomeMessage(null),
     },
   ]);
   const [draft, setDraft] = useState("Waiting to start generating RWA Token Listing Memo...");
@@ -173,14 +186,26 @@ export function DocumentWorkbench() {
     setMessages([{
       id: uuid(),
       role: "assistant",
-      content: "Welcome to the RWA Token Listing Memo Assistant! I will help you complete 12 sections of compliance documentation. Please tell me your token basic information, or say 'start generation' to let me guide you through the entire process.",
+      content: selectedJurisdiction 
+        ? `Welcome! I will help you complete 12 sections of compliance documentation for ${selectedJurisdiction.toUpperCase()} jurisdiction. Please tell me your token basic information, or say 'start generation' to let me guide you through the entire process.`
+        : "Welcome to the RWA Token Listing Memo Assistant! I will help you complete 12 sections of compliance documentation. Please tell me your token basic information, or say 'start generation' to let me guide you through the entire process.",
     }]);
     setDraft("Waiting to start generating RWA Token Listing Memo...");
     setCurrentSection(0);
     setSectionTitle("Executive Summary");
     setSessionId(null);
     setUploadedFiles([]);
-  }, []);
+  }, [selectedJurisdiction]);
+
+  // 当法域选择改变时，更新欢迎消息（仅在初始状态）
+  useEffect(() => {
+    if (messages.length === 1 && messages[0].role === "assistant" && !sessionId) {
+      setMessages([{
+        ...messages[0],
+        content: getWelcomeMessage(selectedJurisdiction)
+      }]);
+    }
+  }, [selectedJurisdiction, sessionId, messages.length]);
 
   // 创建ChatBot会话
   const createSession = useCallback(async (retryCount = 0) => {
@@ -193,7 +218,8 @@ export function DocumentWorkbench() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           user_name: "ChainLex.ai User",
-          project_name: "RWA Token Listing Memo"
+          project_name: "RWA Token Listing Memo",
+          jurisdiction: selectedJurisdiction
         }),
         signal: controller.signal
       });

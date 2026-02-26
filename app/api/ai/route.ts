@@ -33,7 +33,7 @@ export async function POST(request: Request) {
       "X-Title": "ChainLex.ai",
     },
     body: JSON.stringify({
-      model: model ?? "qwen/qwen3-coder:free",
+      model: model ?? "openai/gpt-oss-120b:free",
       messages,
     }),
   });
