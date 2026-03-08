@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { recordOracleAttestation } from "@/lib/oracle-attestations";
+import { isOracleWritebackEnabled, writeRiskAssessmentOnchain } from "@/lib/oracle-onchain";
 
 const ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/;
 const CHATBOT_API_BASE = process.env.CHATBOT_API_BASE ?? process.env.NEXT_PUBLIC_CHATBOT_API_BASE ?? "http://localhost:8000";
@@ -49,6 +50,39 @@ export async function POST(request: Request) {
   }
 
   const risk = (await response.json()) as RiskResponse;
+  let writeback: Awaited<ReturnType<typeof writeRiskAssessmentOnchain>> | { enabled: false };
+  try {
+    writeback = await writeRiskAssessmentOnchain({
+      walletAddress: risk.wallet_address as `0x${string}`,
+      score: risk.score,
+      level: risk.level,
+      reason: risk.reason,
+      isBlacklisted: risk.is_blacklisted,
+    });
+  } catch (error) {
+    const record = await recordOracleAttestation({
+      walletAddress: risk.wallet_address,
+      chain: risk.chain,
+      provider: risk.provider,
+      score: risk.score,
+      level: risk.level,
+      isBlacklisted: risk.is_blacklisted,
+      reason: risk.reason,
+      status: "failed",
+    });
+
+    return NextResponse.json(
+      {
+        error: "Risk assessment succeeded but on-chain writeback failed",
+        details: error instanceof Error ? error.message : String(error),
+        risk,
+        record,
+        writeback: { enabled: isOracleWritebackEnabled(), status: "failed" },
+      },
+      { status: 502 }
+    );
+  }
+
   const record = await recordOracleAttestation({
     walletAddress: risk.wallet_address,
     chain: risk.chain,
@@ -60,5 +94,5 @@ export async function POST(request: Request) {
     status: "succeeded",
   });
 
-  return NextResponse.json({ risk, record });
+  return NextResponse.json({ risk, record, writeback });
 }
