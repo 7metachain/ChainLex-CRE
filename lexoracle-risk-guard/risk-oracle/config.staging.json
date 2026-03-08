@@ -1,6 +1,7 @@
 {
   "schedule": "*/30 * * * * *",
-  "riskApiUrl": "http://localhost:8000/risk-assessment",
+  "goPlusChainId": "1",
+  "fallbackApiUrl": "",
   "walletToAssess": "0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
   "evm": {
     "urwaAddress": "0xD9a655186Aaff2143e65F749CD26ED0DD3510Ee8",
