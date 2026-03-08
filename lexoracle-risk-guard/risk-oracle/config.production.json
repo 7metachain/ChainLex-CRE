@@ -1,0 +1,11 @@
+{
+  "schedule": "*/30 * * * * *",
+  "riskApiUrl": "http://localhost:8000/risk-assessment",
+  "walletToAssess": "0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
+  "evm": {
+    "chainlinkRiskAddress": "0x376c431443FFFFaf23A97Ae2698664F58e3e9e5A",
+    "consumerAddress": "0xA3cBCd430D2b3924ED627FC6919110346A329570",
+    "chainName": "ethereum-testnet-sepolia",
+    "gasLimit": 500000
+  }
+}
