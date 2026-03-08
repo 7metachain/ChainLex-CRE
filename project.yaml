@@ -1,6 +1,11 @@
 # ==========================================================================
-# CRE PROJECT SETTINGS FILE — LexOracle Risk Guard
+# CRE PROJECT SETTINGS FILE (root alias)
 # ==========================================================================
+# The full CRE workflow project lives in ./lexoracle-risk-guard/
+# This root-level file mirrors the settings for `cre` CLI convenience.
+#
+# To simulate:  cd lexoracle-risk-guard && cre workflow simulate risk-oracle --target staging-settings
+# To deploy:    cd lexoracle-risk-guard && cre workflow deploy risk-oracle --target production-settings
 
 staging-settings:
   cre-cli:
