@@ -7,6 +7,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/shopspring/decimal"
 
 	sdk "github.com/smartcontractkit/chainlink-protos/cre/go/sdk"
@@ -17,6 +18,7 @@ import (
 )
 
 type EVMConfig struct {
+	URWAAddress          string `json:"urwaAddress"`
 	ChainlinkRiskAddress string `json:"chainlinkRiskAddress"`
 	ConsumerAddress      string `json:"consumerAddress"`
 	ChainName            string `json:"chainName"`
@@ -45,28 +47,115 @@ type RiskAPIResponse struct {
 	Reason        string  `json:"reason"`
 }
 
+// Transfer(address,address,uint256) event signature hash
+var transferEventSigHash = crypto.Keccak256([]byte("Transfer(address,address,uint256)"))
+
 func InitWorkflow(config *Config, logger *slog.Logger, secretsProvider cre.SecretsProvider) (cre.Workflow[*Config], error) {
+	chainSelector, err := evm.ChainSelectorFromName(config.EVM.ChainName)
+	if err != nil {
+		return nil, fmt.Errorf("invalid chain: %w", err)
+	}
+
+	// EVM Log Trigger: listen for Transfer events from uRWA contract
+	urwaAddress := common.HexToAddress(config.EVM.URWAAddress)
+	logTriggerCfg := &evm.FilterLogTriggerRequest{
+		Addresses: [][]byte{urwaAddress.Bytes()},
+		Topics: []*evm.TopicValues{
+			{Values: [][]byte{transferEventSigHash}},
+		},
+		Confidence: evm.ConfidenceLevel_CONFIDENCE_LEVEL_FINALIZED,
+	}
+	logTrigger := evm.LogTrigger(chainSelector, logTriggerCfg)
+
 	return cre.Workflow[*Config]{
+		// Handler 1: Cron-based periodic assessment (for demo / fallback)
 		cre.Handler(
 			cron.Trigger(&cron.Config{Schedule: config.Schedule}),
 			onCronTrigger,
 		),
+		// Handler 2: Event-driven assessment triggered by uRWA Transfer events
+		cre.Handler(
+			logTrigger,
+			onTransferTrigger,
+		),
 	}, nil
 }
 
+// onCronTrigger assesses the pre-configured wallet address on a schedule.
 func onCronTrigger(config *Config, runtime cre.Runtime, _ *cron.Payload) (string, error) {
 	logger := runtime.Logger()
-	wallet := config.WalletToAssess
+	logger.Info("Cron trigger fired — assessing configured wallet", "wallet", config.WalletToAssess)
+	return assessAndWrite(config, runtime, config.WalletToAssess)
+}
 
-	logger.Info("Starting risk assessment", "wallet", wallet)
+// onTransferTrigger fires when uRWA emits Transfer(from, to, value).
+// It assesses both the sender and receiver addresses.
+func onTransferTrigger(config *Config, runtime cre.Runtime, log *evm.Log) (string, error) {
+	logger := runtime.Logger()
 
-	// Step 1: Call risk API with DON consensus
+	if len(log.Topics) < 3 {
+		return "", fmt.Errorf("Transfer event expected 3 topics, got %d", len(log.Topics))
+	}
+
+	from := common.BytesToAddress(log.Topics[1][12:])
+	to := common.BytesToAddress(log.Topics[2][12:])
+
+	logger.Info("Transfer event detected",
+		"from", from.Hex(),
+		"to", to.Hex(),
+		"block", log.BlockNumber,
+	)
+
+	var lastResult string
+	for _, addr := range []common.Address{from, to} {
+		if addr == (common.Address{}) {
+			continue // skip zero address (mint events)
+		}
+		result, err := assessAndWrite(config, runtime, addr.Hex())
+		if err != nil {
+			logger.Error("Assessment failed for address", "address", addr.Hex(), "error", err)
+			continue
+		}
+		lastResult = result
+	}
+
+	return lastResult, nil
+}
+
+// assessAndWrite is the shared core: call risk API → encode → report → write on-chain.
+func assessAndWrite(config *Config, runtime cre.Runtime, wallet string) (string, error) {
+	logger := runtime.Logger()
+
 	client := &http.Client{}
-	riskPromise := http.SendRequest(config, runtime, client, fetchRisk, cre.ConsensusAggregationFromTags[*RiskResult]())
 
-	riskData, err := riskPromise.Await()
+	fetchFn := func(cfg *Config, l *slog.Logger, sr *http.SendRequester) (*RiskResult, error) {
+		reqBody := fmt.Sprintf(
+			`{"wallet_address":"%s","chain":"%s","provider":"goplus"}`,
+			wallet, cfg.EVM.ChainName,
+		)
+		resp, err := sr.SendRequest(&http.Request{
+			Url:     cfg.RiskAPIURL,
+			Method:  "POST",
+			Headers: map[string]string{"Content-Type": "application/json"},
+			Body:    []byte(reqBody),
+		}).Await()
+		if err != nil {
+			return nil, fmt.Errorf("risk API request failed: %w", err)
+		}
+		var apiResp RiskAPIResponse
+		if err := json.Unmarshal(resp.Body, &apiResp); err != nil {
+			return nil, fmt.Errorf("failed to parse risk response: %w", err)
+		}
+		return &RiskResult{
+			Score:         decimal.NewFromFloat(apiResp.Score),
+			Level:         apiResp.Level,
+			IsBlacklisted: apiResp.IsBlacklisted,
+			Reason:        apiResp.Reason,
+		}, nil
+	}
+
+	riskData, err := http.SendRequest(config, runtime, client, fetchFn, cre.ConsensusAggregationFromTags[*RiskResult]()).Await()
 	if err != nil {
-		logger.Error("Risk API consensus failed", "error", err)
 		return "", fmt.Errorf("risk assessment failed: %w", err)
 	}
 
@@ -75,12 +164,8 @@ func onCronTrigger(config *Config, runtime cre.Runtime, _ *cron.Payload) (string
 		"score", riskData.Score.String(),
 		"level", riskData.Level,
 		"blacklisted", riskData.IsBlacklisted,
-		"reason", riskData.Reason,
 	)
 
-	// Step 2: Encode risk data as ABI calldata for the consumer contract
-	riskLevel := mapRiskLevel(riskData.Level)
-	score := riskData.Score.BigInt()
 	walletAddr := common.HexToAddress(wallet)
 
 	addressType, _ := abi.NewType("address", "", nil)
@@ -89,18 +174,16 @@ func onCronTrigger(config *Config, runtime cre.Runtime, _ *cron.Payload) (string
 	stringType, _ := abi.NewType("string", "", nil)
 	boolType, _ := abi.NewType("bool", "", nil)
 
-	args := abi.Arguments{
+	encoded, err := abi.Arguments{
 		{Type: addressType},
 		{Type: uint8Type},
 		{Type: uint256Type},
 		{Type: stringType},
 		{Type: boolType},
-	}
-
-	encoded, err := args.Pack(
+	}.Pack(
 		walletAddr,
-		riskLevel,
-		score,
+		mapRiskLevel(riskData.Level),
+		riskData.Score.BigInt(),
 		riskData.Reason,
 		riskData.IsBlacklisted,
 	)
@@ -108,7 +191,6 @@ func onCronTrigger(config *Config, runtime cre.Runtime, _ *cron.Payload) (string
 		return "", fmt.Errorf("ABI encoding failed: %w", err)
 	}
 
-	// Step 3: Generate signed report and write to chain
 	report, err := runtime.GenerateReport(&sdk.ReportRequest{
 		EncodedPayload: encoded,
 		HashingAlgo:    "keccak256",
@@ -119,11 +201,7 @@ func onCronTrigger(config *Config, runtime cre.Runtime, _ *cron.Payload) (string
 		return "", fmt.Errorf("report generation failed: %w", err)
 	}
 
-	chainSelector, err := evm.ChainSelectorFromName(config.EVM.ChainName)
-	if err != nil {
-		return "", fmt.Errorf("invalid chain: %w", err)
-	}
-
+	chainSelector, _ := evm.ChainSelectorFromName(config.EVM.ChainName)
 	evmClient := &evm.Client{ChainSelector: chainSelector}
 	receiverAddr := common.HexToAddress(config.EVM.ConsumerAddress)
 
@@ -144,39 +222,9 @@ func onCronTrigger(config *Config, runtime cre.Runtime, _ *cron.Payload) (string
 		"score", riskData.Score.String(),
 		"level", riskData.Level,
 		"txHash", txHash,
-		"txStatus", writeResult.TxStatus,
 	)
 
 	return fmt.Sprintf("assessed %s: score=%s level=%s tx=%s", wallet, riskData.Score.String(), riskData.Level, txHash), nil
-}
-
-func fetchRisk(config *Config, logger *slog.Logger, sendRequester *http.SendRequester) (*RiskResult, error) {
-	reqBody := fmt.Sprintf(
-		`{"wallet_address":"%s","chain":"%s","provider":"goplus"}`,
-		config.WalletToAssess, config.EVM.ChainName,
-	)
-
-	resp, err := sendRequester.SendRequest(&http.Request{
-		Url:     config.RiskAPIURL,
-		Method:  "POST",
-		Headers: map[string]string{"Content-Type": "application/json"},
-		Body:    []byte(reqBody),
-	}).Await()
-	if err != nil {
-		return nil, fmt.Errorf("risk API request failed: %w", err)
-	}
-
-	var apiResp RiskAPIResponse
-	if err := json.Unmarshal(resp.Body, &apiResp); err != nil {
-		return nil, fmt.Errorf("failed to parse risk response: %w", err)
-	}
-
-	return &RiskResult{
-		Score:         decimal.NewFromFloat(apiResp.Score),
-		Level:         apiResp.Level,
-		IsBlacklisted: apiResp.IsBlacklisted,
-		Reason:        apiResp.Reason,
-	}, nil
 }
 
 func mapRiskLevel(level string) uint8 {
