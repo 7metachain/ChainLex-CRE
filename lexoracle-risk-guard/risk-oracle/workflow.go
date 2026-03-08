@@ -52,27 +52,11 @@ type RiskResult struct {
 	Sources       string          `json:"sources" consensus_aggregation:"identical"`
 }
 
-// GoPlus API response shape
+// GoPlus API response shape — result is a flat map of string→string flags
 type GoPlusResponse struct {
-	Code    int                       `json:"code"`
-	Message string                    `json:"message"`
-	Result  map[string]GoPlusAddrInfo `json:"result"`
-}
-
-type GoPlusAddrInfo struct {
-	HoneypotRelatedAddress string `json:"honeypot_related_address"`
-	PhishingActivities     string `json:"phishing_activities"`
-	BlacklistDoubt         string `json:"blacklist_doubt"`
-	DataSource             string `json:"data_source"`
-	StolenFunds            string `json:"stealing_attack"`
-	Blackmail              string `json:"blackmail_activities"`
-	Cybercrime             string `json:"cybercrime"`
-	Moneylaundering        string `json:"money_laundering"`
-	FinancialCrime         string `json:"financial_crime"`
-	MaliciousMining        string `json:"malicious_mining_activities"`
-	MixerUsage             string `json:"mixer"`
-	SanctionedEntity       string `json:"sanctioned"`
-	ContractAddress        string `json:"contract_address"`
+	Code    int               `json:"code"`
+	Message string            `json:"message"`
+	Result  map[string]string `json:"result"`
 }
 
 // Fallback risk API response (our Python backend)
@@ -339,35 +323,26 @@ func fetchGoPlus(sr *http.SendRequester, wallet string, chainID string) (float64
 		return 0, false, "", fmt.Errorf("GoPlus parse failed: %w", err)
 	}
 
-	addrLower := strings.ToLower(wallet)
-	info, ok := gp.Result[addrLower]
-	if !ok {
+	if gp.Result == nil || len(gp.Result) == 0 {
 		return 100, false, "no data from GoPlus (treated as low risk)", nil
 	}
 
 	score := 0.0
 	var flags []string
 
-	riskFields := map[string]string{
-		info.HoneypotRelatedAddress: "honeypot",
-		info.PhishingActivities:     "phishing",
-		info.BlacklistDoubt:         "blacklist_doubt",
-		info.StolenFunds:            "stolen_funds",
-		info.Blackmail:              "blackmail",
-		info.Cybercrime:             "cybercrime",
-		info.Moneylaundering:        "money_laundering",
-		info.FinancialCrime:         "financial_crime",
-		info.MixerUsage:             "mixer",
-		info.SanctionedEntity:       "sanctioned",
+	riskKeys := []string{
+		"honeypot_related_address", "phishing_activities", "blacklist_doubt",
+		"stealing_attack", "blackmail_activities", "cybercrime",
+		"money_laundering", "financial_crime", "mixer", "sanctioned",
 	}
-	for val, name := range riskFields {
-		if val == "1" {
+	for _, key := range riskKeys {
+		if gp.Result[key] == "1" {
 			score += 150
-			flags = append(flags, name)
+			flags = append(flags, key)
 		}
 	}
 
-	blacklisted := info.SanctionedEntity == "1" || info.BlacklistDoubt == "1"
+	blacklisted := gp.Result["sanctioned"] == "1" || gp.Result["blacklist_doubt"] == "1"
 	if blacklisted && score < 900 {
 		score = 900
 	}
