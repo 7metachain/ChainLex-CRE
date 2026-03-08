@@ -16,9 +16,14 @@ pnpm-debug.log*
 # Build output
 /out
 
+# Foundry
+/cache
+/lib/openzeppelin-contracts
+/lib/chainlink
+
+# Python
+__pycache__/
+*.pyc
+
 # Misc
 .DS_Store
-
-# contracts
-/contracts/*
-
