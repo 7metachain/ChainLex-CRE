@@ -521,12 +521,47 @@ LexEnforcer 的自动触发逻辑无法运行。
 
 ---
 
-## 九、关键文件索引
+## 九、CRE DON 部署准备状态（2026-03-08 更新）
+
+### 已完成
+
+| # | 改动 | 状态 |
+|---|------|------|
+| 1 | GoPlus 公网 API 作为主数据源，去掉 localhost | ✅ |
+| 2 | project.yaml 加到仓库根目录 + don-family: zone-a | ✅ |
+| 3 | 多数据源聚合（GoPlus + 可选内部 API），DON median 共识 | ✅ |
+| 4 | Consumer 合约 3 层 DON 验证（Forwarder/WorkflowId/Temporal） | ✅ |
+| 5 | uRWA donFreeze() — 只有 DON 能冻结，发行方不能调用 | ✅ |
+| 6 | CRE simulate 通过（score=807, TX_STATUS_SUCCESS） | ✅ |
+| 7 | 合约部署到 Sepolia（ChainlinkRisk + uRWA + Consumer） | ✅ |
+| 8 | ChainlinkRisk 授权 Consumer 为 authorizedCaller | ✅ |
+| 9 | 审计回调 API（POST /api/oracle/audit-ingest） | ✅ |
+
+### 待审批
+
+- CRE Early Access DON 部署权限 — 已提交申请，等待 Chainlink 团队回复
+- 回复邮件草稿已准备：`cre/workflows/real-estate-tokenization/reply-to-thomas.md`
+
+### Sepolia 合约地址
+
+| 合约 | 地址 |
+|------|------|
+| ChainlinkRisk | `0x376c431443FFFFaf23A97Ae2698664F58e3e9e5A` |
+| uRWA (ccTMMF) | `0xD9a655186Aaff2143e65F749CD26ED0DD3510Ee8` |
+| LexOracleConsumer | `0xA3cBCd430D2b3924ED627FC6919110346A329570` |
+
+---
+
+## 十、关键文件索引
 
 | 文件 | 说明 | 模块 |
 |------|------|------|
 | `contracts/ChainlinkRisk.sol` | 链上风控数据存储合约 | LexOracle |
-| `contracts/uRWA.sol` | ERC-7943 RWA 代币合约，集成风控检查 | LexStudio / LexOracle |
+| `contracts/uRWA.sol` | ERC-7943 RWA 代币合约，集成风控检查 + DON 冻结 | LexStudio / LexOracle |
+| `contracts/LexOracleConsumer.sol` | CRE DON 报告接收器（3 层验证） | LexOracle |
+| `lexoracle-risk-guard/risk-oracle/workflow.go` | CRE Workflow（GoPlus + 多源共识 + 链上写入） | LexOracle |
+| `lexoracle-risk-guard/project.yaml` | CRE 项目配置 | LexOracle |
+| `project.yaml` | CRE 项目配置（根目录副本） | LexOracle |
 | `chatbot/app.py` | Python 后端：合规聊天 + Mock 风控 API | LexStudio / LexOracle |
 | `chatbot/chatbot.py` | LangGraph 智能代理（12 章节文档生成） | LexStudio |
 | `cre/local-runner/main.go` | CRE 本地模拟器（命令行风控调用） | LexOracle |
