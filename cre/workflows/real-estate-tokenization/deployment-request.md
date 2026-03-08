@@ -16,7 +16,7 @@ This proof cannot be fully established through local simulation alone.
 
 2) Repository URL
 
-- GitHub: <REPLACE_ME_GITHUB_URL>
+- GitHub: https://github.com/7metachain/ChainLex-CRE
 - If private, reviewer access granted to: `thodges-gh`
 
 3) Deployment readiness checklist
