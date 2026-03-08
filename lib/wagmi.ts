@@ -19,5 +19,5 @@ export const wagmiConfig = createConfig({
       chain,
       transport: http(),
     }) as any;
-  },
+  }
 });
