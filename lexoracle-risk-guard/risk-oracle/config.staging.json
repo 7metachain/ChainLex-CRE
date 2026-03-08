@@ -4,9 +4,9 @@
   "fallbackApiUrl": "",
   "walletToAssess": "0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
   "evm": {
-    "urwaAddress": "0xD9a655186Aaff2143e65F749CD26ED0DD3510Ee8",
+    "urwaAddress": "0x704c1ea432B9bab6F9DFc6a7425a1fe6358c0a77",
     "chainlinkRiskAddress": "0x376c431443FFFFaf23A97Ae2698664F58e3e9e5A",
-    "consumerAddress": "0xA3cBCd430D2b3924ED627FC6919110346A329570",
+    "consumerAddress": "0xF97B5E5d8724cf9e6C2e5f3C7920e31669c1Dafe",
     "chainName": "ethereum-testnet-sepolia",
     "gasLimit": 500000
   }
