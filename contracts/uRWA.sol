@@ -91,6 +91,9 @@ contract uRWA is Context, ERC20, Ownable, IERC7943 {
     // Chainlink 风险评估合约
     ChainlinkRisk public immutable riskAssessment;
 
+    // DON-authorized enforcer (LexOracleConsumer address)
+    address public donEnforcer;
+
     // 风险评估模式开关
     bool public enableRiskAssessment = true;
 
@@ -100,10 +103,13 @@ contract uRWA is Context, ERC20, Ownable, IERC7943 {
     event Whitelisted(address indexed account, bool status);
     event RiskAssessmentModeToggled(bool enabled);
     event WhitelistModeToggled(bool enabled);
+    event DONEnforcerUpdated(address indexed previous, address indexed current);
+    event DONFreezeExecuted(address indexed user, uint256 amount, string reason);
     error NotZeroAddress();
     error InsufficientRole(address caller, string role);
     error RiskAssessmentRequired(address user, string reason);
     error WhitelistRequired(address user);
+    error OnlyDONEnforcer(address caller, address expected);
 
     /// @notice 构造函数
     /// @param name 代币名称
@@ -256,6 +262,25 @@ contract uRWA is Context, ERC20, Ownable, IERC7943 {
         require(amount <= balanceOf(user), IERC20Errors.ERC20InsufficientBalance(user, balanceOf(user), amount));
         _frozenTokens[user] = amount;
         emit Frozen(user, 0, amount);
+    }
+
+    /// @notice Set the DON enforcer address (LexOracleConsumer)
+    function setDONEnforcer(address _enforcer) external onlyOwner {
+        emit DONEnforcerUpdated(donEnforcer, _enforcer);
+        donEnforcer = _enforcer;
+    }
+
+    /// @notice DON-authorized freeze — only callable by the DON enforcer (LexOracleConsumer).
+    ///         The token issuer (owner) CANNOT call this function, ensuring separation of duties.
+    function donFreeze(address user, uint256 amount, string calldata reason) external {
+        if (msg.sender != donEnforcer || donEnforcer == address(0)) {
+            revert OnlyDONEnforcer(msg.sender, donEnforcer);
+        }
+        uint256 bal = balanceOf(user);
+        uint256 freezeAmount = amount > bal ? bal : amount;
+        _frozenTokens[user] = freezeAmount;
+        emit Frozen(user, 0, freezeAmount);
+        emit DONFreezeExecuted(user, freezeAmount, reason);
     }
 
     /// @notice 强制转账
