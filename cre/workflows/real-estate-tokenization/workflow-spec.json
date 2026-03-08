@@ -1,0 +1,91 @@
+{
+  "name": "chainlex-real-estate-risk-guard",
+  "version": "1.0.0",
+  "environment": "testnet",
+  "owner": "ChainLex.ai",
+  "description": "Continuous AML/sanctions risk monitoring for real-estate token transfers with on-chain writeback.",
+  "networks": {
+    "allowedChainIds": [11155111],
+    "denyMainnet": true
+  },
+  "triggers": [
+    {
+      "type": "log",
+      "chainId": 11155111,
+      "contractAddress": "REPLACE_ME_URWA_ADDRESS",
+      "eventSignature": "Transfer(address,address,uint256)",
+      "fromBlock": "latest"
+    },
+    {
+      "type": "cron",
+      "schedule": "*/10 * * * *",
+      "purpose": "backfill-and-reconciliation"
+    }
+  ],
+  "riskSources": {
+    "primary": {
+      "name": "ChainLex-Risk-API",
+      "url": "REPLACE_ME_RISK_API_PRIMARY",
+      "timeoutMs": 8000
+    },
+    "fallback": {
+      "name": "ChainLex-Risk-API-Replica",
+      "url": "REPLACE_ME_RISK_API_FALLBACK",
+      "timeoutMs": 8000
+    }
+  },
+  "consensus": {
+    "method": "median-with-majority-blacklist",
+    "nodes": 3,
+    "quorum": 2
+  },
+  "normalization": {
+    "scoreScale": "0-1000",
+    "levels": [
+      { "level": "LOW", "min": 0, "max": 399, "enumValue": 1 },
+      { "level": "MEDIUM", "min": 400, "max": 699, "enumValue": 2 },
+      { "level": "HIGH", "min": 700, "max": 899, "enumValue": 3 },
+      { "level": "BLOCKED", "min": 900, "max": 1000, "enumValue": 4 }
+    ],
+    "blacklistWins": true
+  },
+  "onchainWriteback": {
+    "targetContract": "REPLACE_ME_CHAINLINK_RISK_ADDRESS",
+    "function": "updateRiskAssessment(address,uint8,uint256,string,bool)",
+    "requiredRole": "authorizedCaller",
+    "gasLimit": 500000,
+    "confirmations": 1
+  },
+  "idempotency": {
+    "keyTemplate": "${txHash}:${logIndex}:${user}",
+    "ttlHours": 168
+  },
+  "retries": {
+    "maxAttempts": 3,
+    "backoffMs": [500, 2000, 5000]
+  },
+  "httpTrigger": {
+    "enabled": false,
+    "authorizedKeys": ["REPLACE_ME_HTTP_AUTHORIZED_KEY_IF_USED"]
+  },
+  "observability": {
+    "auditIngestUrl": "REPLACE_ME_CHAINLEX_AUDIT_API",
+    "fields": [
+      "workflowRunId",
+      "triggerType",
+      "txHash",
+      "logIndex",
+      "user",
+      "score",
+      "level",
+      "isBlacklisted",
+      "writebackTxHash",
+      "status",
+      "latencyMs"
+    ]
+  },
+  "failureRouting": {
+    "deadLetter": "REPLACE_ME_DLT_ENDPOINT",
+    "pageOnConsecutiveFailures": 5
+  }
+}

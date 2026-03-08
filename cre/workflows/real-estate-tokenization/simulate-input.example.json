@@ -1,0 +1,22 @@
+{
+  "trigger": {
+    "type": "log",
+    "chainId": 11155111,
+    "contractAddress": "0x0000000000000000000000000000000000000000",
+    "eventSignature": "Transfer(address,address,uint256)",
+    "txHash": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "logIndex": 2,
+    "blockNumber": 7654321,
+    "blockTime": "2026-03-08T12:00:00Z"
+  },
+  "event": {
+    "from": "0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
+    "to": "0x1F0fb44Ae473FC4D986d61a3bFb9e4e5A9EBA828",
+    "amount": "1000000000000000000"
+  },
+  "context": {
+    "assetType": "real-estate-token",
+    "jurisdiction": "US",
+    "operatorId": "chainlex-demo"
+  }
+}
