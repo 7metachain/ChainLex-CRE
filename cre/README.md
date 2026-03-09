@@ -1,39 +1,15 @@
-# CRE Local Simulation (HTTP Trigger)
+# CRE Development Tools
 
-This directory contains a minimal local runner that simulates a CRE workflow using HTTP triggers.
-It calls the mock risk API (`/risk-assessment`) and prints the normalized risk payload. This is
-intended as the fastest way to validate the closed-loop logic before wiring real CRE tooling.
+This directory contains development and planning artifacts. **The production CRE workflow is in [`/lexoracle-risk-guard/`](../lexoracle-risk-guard/).**
 
-## Prerequisites
+## Contents
 
-- Go 1.21+
-- The chatbot service running locally (default `http://localhost:8000`)
+### `local-runner/`
+A local-only development tool for testing risk API integration before the CRE workflow was built. Uses localhost endpoints (local development only — **not part of the DON workflow**). Superseded by the production workflow in `lexoracle-risk-guard/`.
 
-## Run
-
-```bash
-cd cre/local-runner
-go run . -wallet 0x742d35Cc6634C0532925a3b844Bc454e4438f44e
-```
-
-Optional flags:
-
-- `-api` override mock API base (default `CHATBOT_API_BASE` or `http://localhost:8000`)
-- `-chain` chain label (default `sepolia`)
-- `-provider` provider label (default `mock-chainalysis`)
-
-## Next Steps
-
-- Replace this runner with a real CRE workflow (Go/WASM) when DON + CLI is ready.
-- Add an on-chain writer step to call `ChainlinkRisk.updateRiskAssessment` via a receiver contract.
-
-## Production Workflow Package
-
-A deployment-ready CRE workflow package for real-estate tokenization is included at:
-
-- `cre/workflows/real-estate-tokenization/README.md`
-- `cre/workflows/real-estate-tokenization/workflow-spec.json`
-- `cre/workflows/real-estate-tokenization/review-checklist.md`
-- `cre/workflows/real-estate-tokenization/deployment-request.md`
-
-Use this package for live deployment requests and reviewer communication.
+### `workflows/real-estate-tokenization/`
+Deployment planning documents:
+- `deployment-request.md` — DON deployment request details
+- `reply-to-thomas.md` — Reviewer communication
+- `workflow-spec.json` — Workflow specification
+- `review-checklist.md` — Pre-deployment checklist

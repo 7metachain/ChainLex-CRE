@@ -1,4 +1,20 @@
-# ChainLex.ai 🏗️
+# ChainLex.ai
+
+> AI-driven RWA compliance platform with Chainlink CRE oracle integration
+
+## CRE Workflow: LexOracle Risk Guard
+
+The Chainlink CRE workflow lives in [`lexoracle-risk-guard/`](./lexoracle-risk-guard/). It provides DON-attested compliance data (Compliance Feed) for tokenized real-world assets.
+
+- **Workflow:** [`lexoracle-risk-guard/risk-oracle/workflow.go`](./lexoracle-risk-guard/risk-oracle/workflow.go)
+- **Project config:** [`project.yaml`](./project.yaml)
+- **Contracts:** [`contracts/`](./contracts/) (ChainlinkRisk, uRWA, LexOracleConsumer, ComplianceVault)
+- **Simulate:** `cd lexoracle-risk-guard && cre workflow simulate risk-oracle --target staging-settings`
+- **Broadcast tx:** [`0xc0cb...1804`](https://sepolia.etherscan.io/tx/0xc0cb044ac59393c10e668b66d280ba152136ed2730e3843898bd0f6757aa1804) (real Sepolia transaction)
+
+See [`lexoracle-risk-guard/README.md`](./lexoracle-risk-guard/README.md) for full architecture and deployment details.
+
+---
 
 > AI驱动的RWA代币合规发行工作台 - 让现实世界资产上链变得简单合规
 
