@@ -542,13 +542,23 @@ LexEnforcer 的自动触发逻辑无法运行。
 - CRE Early Access DON 部署权限 — 已提交申请，等待 Chainlink 团队回复
 - 回复邮件草稿已准备：`cre/workflows/real-estate-tokenization/reply-to-thomas.md`
 
-### Sepolia 合约地址
+### Sepolia 合约地址（最新 v2）
 
-| 合约 | 地址 |
-|------|------|
-| ChainlinkRisk | `0x376c431443FFFFaf23A97Ae2698664F58e3e9e5A` |
-| uRWA (ccTMMF) | `0xD9a655186Aaff2143e65F749CD26ED0DD3510Ee8` |
-| LexOracleConsumer | `0xA3cBCd430D2b3924ED627FC6919110346A329570` |
+| 合约 | 地址 | 说明 |
+|------|------|------|
+| ChainlinkRisk | `0x376c431443FFFFaf23A97Ae2698664F58e3e9e5A` | Compliance Feed（合规数据层） |
+| uRWA v2 (ccTMMF) | `0x704c1ea432B9bab6F9DFc6a7425a1fe6358c0a77` | RWA 代币 + DON 冻结 |
+| LexOracleConsumer v2 | `0xF97B5E5d8724cf9e6C2e5f3C7920e31669c1Dafe` | DON 报告接收器（3 层验证） |
+| **ComplianceVault** | `0x71eb1C48A9504f226fE703606a7a3276a5F85815` | **第三方金库（DON 必要性的核心论据）** |
+
+### 为什么 DON 部署是自然必要的
+
+ComplianceVault 代表第三方协议（金库运营方 ≠ 代币发行方）。金库在允许用户存入 ccTMMF 之前，调用 `ChainlinkRisk.isUserAllowed()` 检查合规状态。
+
+- 如果合规数据由代币发行方通过 simulate 写入 → 金库不信任（利益冲突）
+- 如果合规数据由 Chainlink DON 独立验证并写入 → 金库可以信任（与 Price Feed 相同的信任模型）
+
+这使得 ChainlinkRisk 从"内部风控工具"升级为"公开 Compliance Feed"，DON 是第三方信任的基础。
 
 ---
 
@@ -559,6 +569,8 @@ LexEnforcer 的自动触发逻辑无法运行。
 | `contracts/ChainlinkRisk.sol` | 链上风控数据存储合约 | LexOracle |
 | `contracts/uRWA.sol` | ERC-7943 RWA 代币合约，集成风控检查 + DON 冻结 | LexStudio / LexOracle |
 | `contracts/LexOracleConsumer.sol` | CRE DON 报告接收器（3 层验证） | LexOracle |
+| `contracts/IComplianceFeed.sol` | 合规数据 Feed 标准接口 | LexOracle |
+| `contracts/ComplianceVault.sol` | 第三方合规准入金库（DON 信任消费者） | LexOracle |
 | `lexoracle-risk-guard/risk-oracle/workflow.go` | CRE Workflow（GoPlus + 多源共识 + 链上写入） | LexOracle |
 | `lexoracle-risk-guard/project.yaml` | CRE 项目配置 | LexOracle |
 | `project.yaml` | CRE 项目配置（根目录副本） | LexOracle |

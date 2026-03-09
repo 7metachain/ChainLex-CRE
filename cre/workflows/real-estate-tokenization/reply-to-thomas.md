@@ -2,62 +2,58 @@ Subject: Re: CRE Live Workflow Deployment Request - LexOracle Risk Guard (Update
 
 Hi Thomas,
 
-Thanks for the feedback — you're right on both points. I've made the following changes:
+Thanks for the feedback — both issues have been fixed, and I'd like to explain why simulate is insufficient for our architecture.
 
-## 1. Local URLs removed
+## 1. Fixes applied
 
-The workflow now uses **GoPlus Security API** (https://api.gopluslabs.io) as its primary public data source. No localhost references remain in any config file. An optional self-hosted fallback API can be configured but is disabled by default.
+**Local URLs removed:** The workflow now uses GoPlus Security API (https://api.gopluslabs.io) as its primary public data source. No localhost references remain. Simulation passes with real GoPlus data (score=0, level=LOW, sources=goplus, TX_STATUS_SUCCESS).
 
-Commit: `56030a5` — "feat: multi-source risk assessment via GoPlus public API"
+**project.yaml at repo root:** Added with `don-family: "zone-a"` and `workflow-owner-address`.
 
-## 2. project.yaml added to repo root
+## 2. Why simulate is insufficient — third-party data consumers
 
-A root-level `project.yaml` with `don-family: "zone-a"` and `workflow-owner-address` is now present.
+Our system isn't just a self-contained risk check. ChainlinkRisk functions as a **Compliance Feed** — the same trust model as Chainlink Price Feeds.
 
-Commit: `95a46f3` — "fix: add project.yaml to repo root and configure don-family"
+We've deployed a `ComplianceVault` contract (Sepolia: `0x71eb1C48A9504f226fE703606a7a3276a5F85815`) that represents a **third-party vault operator** accepting our ccTMMF token as deposits. Before allowing any deposit, the vault calls `ChainlinkRisk.isUserAllowed(depositor)` to verify compliance status.
 
-## 3. Why simulate is insufficient for our use case
+Here's the trust problem:
 
-Our project is a compliance rail for regulated tokenized money market funds (TMMF). Three architectural decisions make DON deployment a hard requirement, not a preference:
+```
+Token issuer (us) runs simulate → writes risk data to ChainlinkRisk
+Third-party vault reads ChainlinkRisk → "Who wrote this data?"
+Answer: "The token issuer themselves"
+→ Vault operator cannot trust self-reported compliance data
+→ This is a conflict of interest that regulators flag
+```
 
-**a) Conflict of interest separation (regulatory requirement)**
+```
+DON runs workflow → writes risk data to ChainlinkRisk via KeystoneForwarder
+Third-party vault reads ChainlinkRisk → "Who wrote this data?"
+Answer: "Chainlink DON — independently verified, BFT consensus, on-chain signature proof"
+→ Vault operator can independently verify the data source
+→ Satisfies FATF/MiCA "independent and verifiable" requirement
+```
 
-The token issuer (us) must not be the same party running compliance checks. This is a basic regulatory principle (FATF Travel Rule, EU MiCA "independent and verifiable" data sources). Running simulate means we assess our own tokens — a conflict of interest that auditors would flag. DON provides independent third-party attestation.
+The vault doesn't trust us. It trusts the DON. This is identical to why Aave trusts Chainlink Price Feeds instead of asking token issuers to self-report prices.
 
-**b) On-chain signature enforcement (smart contract requirement)**
+With simulate, the compliance data is self-reported — the ComplianceVault integration has no verifiable trust anchor. Only DON deployment provides the independent attestation that third-party protocols require.
 
-Our `LexOracleConsumer` contract is configured with:
-- `setExpectedWorkflowId()` — only accepts reports from our specific workflow
-- `setExpectedWorkflowOwner()` — verifies the DON-attested owner address
-- Forwarder check — only `KeystoneForwarder` can call `onReport()`
+## 3. Deployment details
 
-In production, `MockKeystoneForwarder` reports would be **rejected by the contract itself**. This makes DON a technical prerequisite, not optional.
+- Repo: https://github.com/7metachain/ChainLex-CRE (branch: `codex/mock-oracle-closed-loop`)
+- Cron trigger: every 10 minutes. No faster.
+- Testnet only (Sepolia, chainId 11155111). No mainnet writes.
+- Time-limited deployment — can be deactivated after the hackathon.
 
-**c) Multi-source DON consensus (data integrity)**
+Contracts on Sepolia:
+| Contract | Address |
+|----------|---------|
+| ChainlinkRisk (Compliance Feed) | `0x376c431443FFFFaf23A97Ae2698664F58e3e9e5A` |
+| uRWA v2 (ccTMMF token) | `0x704c1ea432B9bab6F9DFc6a7425a1fe6358c0a77` |
+| LexOracleConsumer v2 (IReceiver) | `0xF97B5E5d8724cf9e6C2e5f3C7920e31669c1Dafe` |
+| ComplianceVault (third-party consumer) | `0x71eb1C48A9504f226fE703606a7a3276a5F85815` |
 
-Each DON node independently calls GoPlus Security API and an optional internal risk model. The `median` consensus on risk scores means no single node (including the workflow operator) can manipulate the final assessment. A single machine running simulate cannot provide equivalent BFT guarantees.
-
-**d) DON-exclusive enforcement (separation of duties in smart contract)**
-
-We added `donFreeze()` to our uRWA token contract — a freeze function that **only the DON enforcer (LexOracleConsumer) can call**. The token issuer/owner explicitly cannot trigger this function. This code-enforced separation only works with real DON-signed reports.
-
-## Updated repository
-
-https://github.com/7metachain/ChainLex-CRE (branch: `codex/mock-oracle-closed-loop`)
-
-Key files:
-- `project.yaml` — root-level CRE config
-- `lexoracle-risk-guard/risk-oracle/workflow.go` — CRE workflow (dual trigger: Cron + EVM Log)
-- `contracts/LexOracleConsumer.sol` — DON-exclusive consumer with 3-layer verification
-- `contracts/uRWA.sol` — ERC-7943 token with DON-authorized enforcement
-- `contracts/ChainlinkRisk.sol` — on-chain risk assessment storage
-
-Deployed contracts (Sepolia):
-- ChainlinkRisk: `0x376c431443FFFFaf23A97Ae2698664F58e3e9e5A`
-- uRWA (ccTMMF): `0xD9a655186Aaff2143e65F749CD26ED0DD3510Ee8`
-- LexOracleConsumer: `0xA3cBCd430D2b3924ED627FC6919110346A329570`
-
-Happy to provide any additional information or walk through the code.
+Happy to walk through the code or answer any questions.
 
 Best,
 Jiajia Chen
