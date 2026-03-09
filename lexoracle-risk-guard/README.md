@@ -67,11 +67,35 @@ Select trigger `1` (cron) when prompted. Expected output:
 ✓ Workflow Simulation Result: "assessed 0x742d35...: score=0 level=LOW"
 ```
 
-### Deploy (requires Early Access)
+### Simulate with broadcast (real Sepolia transactions)
+
+```bash
+CRE_ETH_PRIVATE_KEY=0xYourSepoliaKey cre workflow simulate risk-oracle --target staging-settings --broadcast
+```
+
+Verified broadcast on 2026-03-09:
+- tx: [`0xc0cb...1804`](https://sepolia.etherscan.io/tx/0xc0cb044ac59393c10e668b66d280ba152136ed2730e3843898bd0f6757aa1804)
+- Result: score=0, level=LOW, sources=goplus, status=success
+
+### Deploy to DON (requires Early Access)
 
 ```bash
 cre workflow deploy risk-oracle --target production-settings
 ```
+
+### Forwarder switch plan (Mock → Production)
+
+The Consumer contract is currently configured with `MockKeystoneForwarder` (`0x15fC...`) for simulation. Before DON deployment:
+
+```bash
+# Switch to production KeystoneForwarder
+cast send 0xF97B5E5d8724cf9e6C2e5f3C7920e31669c1Dafe \
+  "setForwarderAddress(address)" 0xF8344CFd5c43616a4366C34E3EEE75af79a74482 \
+  --rpc-url https://ethereum-sepolia-rpc.publicnode.com \
+  --private-key $DEPLOYER_KEY
+```
+
+This is a one-call switch — no redeployment needed.
 
 ## Key Files
 

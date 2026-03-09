@@ -53,6 +53,20 @@ Contracts on Sepolia:
 | LexOracleConsumer v2 (IReceiver) | `0xF97B5E5d8724cf9e6C2e5f3C7920e31669c1Dafe` |
 | ComplianceVault (third-party consumer) | `0x71eb1C48A9504f226fE703606a7a3276a5F85815` |
 
+## 4. Broadcast evidence (real Sepolia transactions)
+
+We ran `cre simulate --broadcast` which produced a **real on-chain transaction** on Sepolia:
+
+- **Tx:** [`0xc0cb044a...aa1804`](https://sepolia.etherscan.io/tx/0xc0cb044ac59393c10e668b66d280ba152136ed2730e3843898bd0f6757aa1804)
+- **Block:** 10411693
+- **Result:** score=0, level=LOW, sources=goplus
+
+The uRWA contract has live activity — we minted 10,000 ccTMMF and executed a real Transfer event ([`0x6ac2d03b...`](https://sepolia.etherscan.io/tx/0x6ac2d03bb9a44a3284e0ec1122035ea0d73b3b203014a8668c38c2f31821d5a8)) so the EVM Log Trigger has real events to monitor.
+
+## 5. Forwarder switch plan
+
+The Consumer contract currently uses `MockKeystoneForwarder` for simulation. Once DON deployment access is granted, we'll switch to the production `KeystoneForwarder` (`0xF834...`) via a single `setForwarderAddress()` call — no redeployment needed. The README documents this step.
+
 Happy to walk through the code or answer any questions.
 
 Best,
