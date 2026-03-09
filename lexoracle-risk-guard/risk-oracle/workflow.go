@@ -32,12 +32,11 @@ type EVMConfig struct {
 }
 
 type Config struct {
-	Schedule       string      `json:"schedule"`
-	GoPlusChainID  string      `json:"goPlusChainId"`
-	FallbackAPIURL string      `json:"fallbackApiUrl"`
-	WalletToAssess string      `json:"walletToAssess"`
-	EVM            EVMConfig   `json:"evm"`
-	CrossChainEVMs []EVMConfig `json:"crossChainEvms"`
+	Schedule       string    `json:"schedule"`
+	GoPlusChainID  string    `json:"goPlusChainId"`
+	FallbackAPIURL string    `json:"fallbackApiUrl"`
+	WalletToAssess string    `json:"walletToAssess"`
+	EVM            EVMConfig `json:"evm"`
 }
 
 // ---------------------------------------------------------------------------
@@ -197,44 +196,7 @@ func assessAndWrite(config *Config, runtime cre.Runtime, wallet string) (string,
 	}
 
 	txHash := common.BytesToHash(writeResult.TxHash).Hex()
-	logger.Info("Written to primary chain", "wallet", wallet, "chain", config.EVM.ChainName, "txHash", txHash)
-
-	// Cross-chain compliance passport: replicate risk data to additional chains
-	for _, xEvm := range config.CrossChainEVMs {
-		xChainSelector, err := evm.ChainSelectorFromName(xEvm.ChainName)
-		if err != nil {
-			logger.Error("Cross-chain: invalid chain name", "chain", xEvm.ChainName, "error", err)
-			continue
-		}
-
-		xReport, err := runtime.GenerateReport(&sdk.ReportRequest{
-			EncodedPayload: encoded,
-			HashingAlgo:    "keccak256",
-			SigningAlgo:    "ecdsa",
-			EncoderName:    "evm",
-		}).Await()
-		if err != nil {
-			logger.Error("Cross-chain: report generation failed", "chain", xEvm.ChainName, "error", err)
-			continue
-		}
-
-		xClient := &evm.Client{ChainSelector: xChainSelector}
-		xReceiver := common.HexToAddress(xEvm.ConsumerAddress)
-
-		xResult, err := xClient.WriteReport(runtime, &evm.WriteCreReportRequest{
-			Receiver: xReceiver.Bytes(),
-			Report:   xReport,
-			GasConfig: &evm.GasConfig{
-				GasLimit: xEvm.GasLimit,
-			},
-		}).Await()
-		if err != nil {
-			logger.Error("Cross-chain: write failed", "chain", xEvm.ChainName, "error", err)
-			continue
-		}
-		xTxHash := common.BytesToHash(xResult.TxHash).Hex()
-		logger.Info("Written to cross-chain", "chain", xEvm.ChainName, "txHash", xTxHash)
-	}
+	logger.Info("Written to chain", "wallet", wallet, "chain", config.EVM.ChainName, "txHash", txHash)
 
 	return fmt.Sprintf("assessed %s: score=%s level=%s sources=%s tx=%s",
 		wallet, riskData.Score.String(), riskData.Level, riskData.Sources, txHash), nil
