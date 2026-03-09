@@ -73,9 +73,11 @@ Select trigger `1` (cron) when prompted. Expected output:
 CRE_ETH_PRIVATE_KEY=0xYourSepoliaKey cre workflow simulate risk-oracle --target staging-settings --broadcast
 ```
 
-Verified broadcast on 2026-03-09:
-- tx: [`0xc0cb...1804`](https://sepolia.etherscan.io/tx/0xc0cb044ac59393c10e668b66d280ba152136ed2730e3843898bd0f6757aa1804)
-- Result: score=0, level=LOW, sources=goplus, status=success
+Verified broadcast on 2026-03-09 (post-fix):
+- tx: [`0x1155...dce7`](https://sepolia.etherscan.io/tx/0x1155304b455fb7460f87ae48888be53dea048a189fded84ad6778bae9752dce7)
+- Result: score=0, level=LOW, sources=goplus, ReportProcessed(result=true)
+
+**Simulate note:** LexOracleConsumer must have `expectedWorkflowOwner=0` during simulate (CRE uses placeholder address). Set via `cast send <Consumer> "setExpectedWorkflowOwner(address)" 0x0`.
 
 ### Deploy to DON (requires Early Access)
 

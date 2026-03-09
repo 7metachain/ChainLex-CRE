@@ -14,6 +14,8 @@ export type OracleAttestation = {
   reason: string;
   status: "succeeded" | "failed";
   createdAt: string;
+  txHash: string;
+  action: "PASS" | "REVIEW" | "FREEZE";
 };
 
 type InsertOracleAttestation = Omit<OracleAttestation, "id" | "createdAt">;
@@ -60,7 +62,13 @@ async function ensureTable() {
 export async function recordOracleAttestation(entry: InsertOracleAttestation): Promise<OracleAttestation> {
   const id = randomUUID();
   const createdAt = new Date().toISOString();
-  const record: OracleAttestation = { id, createdAt, ...entry };
+  const record: OracleAttestation = {
+    id,
+    createdAt,
+    txHash: "",
+    action: "PASS",
+    ...entry,
+  };
 
   const sql = getSql();
   if (!sql) {
