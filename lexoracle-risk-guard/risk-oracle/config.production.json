@@ -9,14 +9,5 @@
     "consumerAddress": "0xF97B5E5d8724cf9e6C2e5f3C7920e31669c1Dafe",
     "chainName": "ethereum-testnet-sepolia",
     "gasLimit": 500000
-  },
-  "crossChainEvms": [
-    {
-      "urwaAddress": "",
-      "chainlinkRiskAddress": "",
-      "consumerAddress": "",
-      "chainName": "ethereum-testnet-sepolia-base-1",
-      "gasLimit": 500000
-    }
-  ]
+  }
 }
